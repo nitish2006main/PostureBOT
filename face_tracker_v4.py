@@ -1,5 +1,5 @@
 """
-face_tracker_v4.py  —  PCMS - Posture Correcting Monitoring System (Python side)
+face_tracker_v4.py  —  PostureBOT 
 ===========================================================
 Camera is physically mounted on the pan-tilt head.
 MediaPipe detects the nose tip pixel error and sends it to the ESP32.
@@ -614,7 +614,7 @@ def main():
 
     # print startup banner so the user knows the system is launching
     print("=" * 58)
-    print("  PCMS v4")
+    print("  PostureBOT")
     # show which serial port and baud rate will be used to talk to the ESP32
     print(f"  Port     : {SERIAL_PORT} @ {BAUD_RATE}")
     # show all ports detected so the user can troubleshoot if the wrong one is selected
@@ -689,9 +689,9 @@ def main():
     camera = CameraCapture(cap)
 
     # create the OpenCV display window where the camera feed will be shown
-    cv2.namedWindow("PCMS v4", cv2.WINDOW_NORMAL)
+    cv2.namedWindow("PostureBOT", cv2.WINDOW_NORMAL)
     # position the window at the top-left corner of the screen
-    cv2.moveWindow("PCMS v4", 0, 0)
+    cv2.moveWindow("PostureBOT", 0, 0)
 
     # ── CALIBRATION STATE ─────────────────────────────────────────────────────
     calib_done          = False  # True once the 5s hold has completed
@@ -790,14 +790,14 @@ def main():
             cv2.rectangle(frame, (0, 0), (w, 26), (0, 0, 0), -1)
             # display paused status and instructions for resuming via the rotary encoder
             cv2.putText(frame,
-                        "PCMS v4  |  PAUSED  |  TURN encoder to Resume/Stop",
+                        "PostureBOT  |  PAUSED  |  TURN encoder to Resume/Stop",
                         (8, 17), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (80, 80, 200), 1)
             # display large PAUSED text in the centre of the frame
             cv2.putText(frame, "PAUSED",
                         (cx - 50, cy), cv2.FONT_HERSHEY_DUPLEX, 1.2,
                         (80, 80, 200), 2)
             # show the paused frame to the user
-            cv2.imshow("PCMS v4", frame)
+            cv2.imshow("PostureBOT", frame)
             # allow quitting with Q even while paused
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
@@ -1355,7 +1355,7 @@ def main():
         sess_lbl = f"SESSION  {pts} pts" if active_session else "IDLE"
         # render the full status line across the top of the frame
         cv2.putText(frame,
-                    f"PCMS v4  |  {status}  |  {calib_lbl}  |  {sess_lbl}",
+                    f"PostureBOT  |  {status}  |  {calib_lbl}  |  {sess_lbl}",
                     (8, 17), cv2.FONT_HERSHEY_SIMPLEX, 0.42, sc, 1)
         # show current FPS in the top-right corner
         cv2.putText(frame, f"FPS:{fps_display:.1f}",
@@ -1380,7 +1380,7 @@ def main():
                         cv2.FONT_HERSHEY_SIMPLEX, 0.40, (120, 180, 255), 1)
 
         # push the fully annotated frame to the display window
-        cv2.imshow("PCMS v4", frame)
+        cv2.imshow("PostureBOT", frame)
         # wait 1ms for a keypress — required for OpenCV to process window events
         key = cv2.waitKey(1) & 0xFF
         if key == ord("e"):

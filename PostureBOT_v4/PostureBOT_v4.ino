@@ -1,12 +1,12 @@
 /*
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  pcms_v4.ino  —  PCMS - Posture Correcting Monitoring System Firmware                           ║
+║  PostureBOT_v4.ino  —  PostureBOT                                           ║
 ║  Target : ESP32-S3  (dual-core, FreeRTOS)                                   ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
 ║  OVERVIEW                                                                    ║
 ║  ─────────────────────────────────────────────────────────────────────────  ║
-║  Camera is physically mounted on the PCMS head unit.  Python (MediaPipe)     ║
+║  Camera is physically mounted on the PostureBOT head unit.  Python (MediaPipe)║
 ║  sends the pixel error (how far the nose is from the screen centre) via     ║
 ║  serial.  The ESP32 runs a PID controller and drives the servos to chase    ║
 ║  the face.  XYZ coordinates are computed here from servo angles + face Z.  ║
@@ -352,19 +352,19 @@ void IRAM_ATTR swISR() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 void loadNVS() {
-    // Open the "pcms" namespace in read-only mode.
+    // Open the "PostureBOT" namespace in read-only mode.
     // getInt("cpan", PAN_ORIGIN) = read the value stored as "cpan";
     // if nothing is saved yet, use PAN_ORIGIN as the default.
-    prefs.begin("pcms", true);
+    prefs.begin("PostureBOT", true);
     calib_pan_tick  = prefs.getInt("cpan",  PAN_ORIGIN);
     calib_tilt_tick = prefs.getInt("ctilt", TILT_ORIGIN);
     prefs.end();
 }
 
 void saveNVS() {
-    // Open the "pcms" namespace in read-write mode and store the current
+    // Open the "PostureBOT" namespace in read-write mode and store the current
     // calibration tick values under the keys "cpan" and "ctilt".
-    prefs.begin("pcms", false);
+    prefs.begin("PostureBOT", false);
     prefs.putInt("cpan",  calib_pan_tick);
     prefs.putInt("ctilt", calib_tilt_tick);
     prefs.end();
@@ -397,7 +397,7 @@ void oledTitle(const char* text, uint16_t bg, uint16_t fg) {
 void drawWelcome() {
     tft.fillScreen(BLACK);
 
-    const char* title = "PCMS";
+    const char* title = "PostureBOT";
     for (int i = 0; title[i]; i++) {
         tft.setTextSize(2);
         tft.setTextColor(CYAN);
@@ -444,7 +444,7 @@ void drawMenu(int sel = -1) {
     if (sel < 0) sel = menuSel;   // use the global selection if none specified
     xSemaphoreTake(oledMutex, portMAX_DELAY);
     tft.fillScreen(BLACK);
-    oledTitle("[ PCMS v4 ]", DARK_CYAN, BLACK);
+    oledTitle("[ PostureBOT ]", DARK_CYAN, BLACK);
 
     // Draw each menu item as a rounded rectangle.
     // The selected item gets a solid cyan fill; others get a dim outline only.

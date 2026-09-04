@@ -1,5 +1,5 @@
 """
-session_analytics.py  —  PCMS session browser, trend analysis, and overlay comparison
+session_analytics.py  —  PostureBOT session browser, trend analysis, and overlay comparison
 ======================================================================================
 Extends the original single-session replay script with two new views:
   - Trend: plots a stability score across every saved session and flags
