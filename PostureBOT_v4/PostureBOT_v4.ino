@@ -8,7 +8,7 @@
 ║  ─────────────────────────────────────────────────────────────────────────  ║
 ║  Camera is physically mounted on the PostureBOT head unit.  Python (MediaPipe)║
 ║  sends the pixel error (how far the nose is from the screen centre) via     ║
-║  serial.  The ESP32 runs a PID controller and drives the servos to chase    ║
+║  serial.  The ESP32 runs a P controller and drives the servos to chase    ║
 ║  the face.  XYZ coordinates are computed here from servo angles + face Z.  ║
 ║                                                                              ║
 ║  COORDINATE ORIGIN = calibration pose (face centred in camera frame)        ║
@@ -19,7 +19,7 @@
 ║  SERIAL PROTOCOL                                                             ║
 ║  ─────────────────────────────────────────────────────────────────────────  ║
 ║   Python → ESP32:                                                            ║
-║     "ERR,px,py"   Raw pixel error; ESP32 PID drives servos                  ║
+║     "ERR,px,py"   Raw pixel error; ESP32 P drives servos                  ║
 ║     "DIST,z_cm"   Current face Z in cm; used for XYZ computation            ║
 ║     "CALIB_OK"    Python detected stable face lock → save calib ticks       ║
 ║     "WARN"        Face/eyes missing, in grace window                        ║
@@ -44,7 +44,7 @@
 ║  ─────────────────────────────────────────────────────────────────────────  ║
 ║   Core 1 (latency-sensitive)                                                ║
 ║     taskSerial  pri 4   USB serial send / receive with Python               ║
-║     taskServo   pri 4   PID loop — moves servos to chase the nose           ║
+║     taskServo   pri 4   P loop — moves servos to chase the nose           ║
 ║   Core 0 (background / IO)                                                  ║
 ║     taskBuzzer  pri 2   Warning audio feedback                              ║
 ║     taskOLED    pri 2   Live OLED refresh every 100 ms                     ║
@@ -123,7 +123,7 @@ Preferences prefs;
 #define TILT_MAX        585
 
 // Conversion factor: how many degrees does the camera move per one tick step?
-// Used only for displaying angles on the OLED — not used by the PID maths directly.
+// Used only for displaying angles on the OLED — not used by the P maths directly.
 #define PAN_DEG_PER_TICK   (180.0f / 450.0f)
 #define TILT_DEG_PER_TICK  (180.0f / 450.0f)
 
@@ -139,7 +139,7 @@ Preferences prefs;
 
 // Deadzone: ignore pixel errors smaller than ±15 pixels.
 // This stops the camera from jittering when the nose is already very close to centre.
-#define PID_DEADZONE_PX     15
+#define P_DEADZONE_PX     15
 
 
 // ── Safe servo write helpers ──────────────────────────────────────────────────
@@ -224,7 +224,7 @@ struct XYMsg {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Where the servos physically are right now (in ticks).
-// Written by taskServo after each PID step; read by taskOLED and taskSerial.
+// Written by taskServo after each P step; read by taskOLED and taskSerial.
 volatile int     g_pan_tick    = PAN_ORIGIN;
 volatile int     g_tilt_tick   = TILT_ORIGIN;
 
@@ -564,10 +564,10 @@ int drawStatsScreen() {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CALIBRATION PROCEDURE
 //  Step-by-step what happens:
-//   1. Reset PID state and drive servos to the mechanical origin (straight ahead).
+//   1. Reset P state and drive servos to the mechanical origin (straight ahead).
 //   2. Tell Python "CALIBRATING" so it starts sending ERR,px,py pixel errors.
 //   3. Show an instruction screen ("Look at camera & hold still").
-//   4. Wait — the ESP32 PID steers the camera while Python watches for the nose
+//   4. Wait — the ESP32 P steers the camera while Python watches for the nose
 //      to stay inside the target box for 5 seconds.
 //   5. Python sends "CALIB_OK" when stable → we lock the current servo positions
 //      as the calibration origin and save to flash.
@@ -577,7 +577,7 @@ void runCalibration() {
     g_calibOK   = false;
 
     // Physically move both servos to the centre position first, then wait
-    // 600 ms for them to settle before enabling the PID loop.
+    // 600 ms for them to settle before enabling the P loop.
     setPanTick(PAN_ORIGIN);   setTiltTick(TILT_ORIGIN);
     g_pan_tick  = PAN_ORIGIN; g_tilt_tick = TILT_ORIGIN;
     delay(600);
@@ -645,7 +645,7 @@ void runCalibration() {
     }
 
     // "CALIB_OK" arrived — Python confirmed the face was stable for 5 seconds.
-    // Freeze the PID by stopping the session, then capture the current positions.
+    // Freeze the P by stopping the session, then capture the current positions.
     g_running = false;
     delay(100);   // give taskServo one more cycle to finish
 
@@ -663,6 +663,7 @@ void runCalibration() {
     tft.setCursor(8, 26); tft.print("Pan:  "); tft.print(calib_pan_tick);  tft.print(" ticks");
     tft.setCursor(8, 40); tft.print("Tilt: "); tft.print(calib_tilt_tick); tft.print(" ticks");
 
+    //showing how much of an extra degree position it is from the calib to origin position
     float pan_deg  = (calib_pan_tick  - PAN_ORIGIN)  * PAN_DEG_PER_TICK;
     float tilt_deg = (calib_tilt_tick - TILT_ORIGIN) * TILT_DEG_PER_TICK;
     tft.setTextColor(WHITE);
@@ -746,7 +747,7 @@ void taskSerial(void* pv) {
                     g_targetLost = true;
 
                 } else if (buf == "FOUND") {
-                    // Face/eyes came back — resume normal PID tracking.
+                    // Face/eyes came back — resume normal P tracking.
                     g_targetLost = false;
 
                 } else if (buf == "LOST" || buf == "NOEYES") {
@@ -788,7 +789,7 @@ void taskSerial(void* pv) {
                 } else if (buf.startsWith("ERR,")) {
                     // The main tracking message: "ERR,px,py"
                     // Parse the two integers and push them into the queue
-                    // so taskServo's PID loop can consume them.
+                    // so taskServo's P loop can consume them.
                     String vals = buf.substring(4);
                     int ci = vals.indexOf(',');
                     if (ci > 0) {
@@ -941,8 +942,8 @@ void taskServo(void* pv) {
                 int16_t ey = (int16_t)filt_err_y;   // positive = nose below centre
 
                 // Apply deadzone per axis; negate ey for tilt direction.
-                int pan_delta  = (abs(ex) > PID_DEADZONE_PX) ? (int)(PAN_KP  * (float)ex)   : 0;
-                int tilt_delta = (abs(ey) > PID_DEADZONE_PX) ? (int)(TILT_KP * -(float)ey)  : 0;
+                int pan_delta  = (abs(ex) > P_DEADZONE_PX) ? (int)(PAN_KP  * (float)ex)   : 0;
+                int tilt_delta = (abs(ey) > P_DEADZONE_PX) ? (int)(TILT_KP * -(float)ey)  : 0;
 
                 int target_pan  = constrain(cur_pan  + pan_delta,  PAN_MIN,  PAN_MAX);
                 int target_tilt = constrain(cur_tilt + tilt_delta, TILT_MIN, TILT_MAX);

@@ -68,7 +68,7 @@ from datetime import datetime
 #  USER CONFIGURATION
 # ══════════════════════════════════════════════════════════
 
-SERIAL_PORT      = "COM4"
+SERIAL_PORT      = "COM3"
 BAUD_RATE        = 115200
 SEND_INTERVAL    = 0.05
 SERIAL_BOOT_WAIT = 3.0
@@ -669,7 +669,7 @@ def main():
     face_landmarker = mp_vision.FaceLandmarker.create_from_options(lm_opts)
 
     # CAP_DSHOW is a Windows-specific low-latency camera driver that reduces frame delay
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
     # only keep 1 frame in the buffer so we always get the most recent image
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     # MJPG compresses frames before sending over USB, keeping bandwidth low at high FPS
