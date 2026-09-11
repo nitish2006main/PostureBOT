@@ -140,7 +140,7 @@ RIGHT_EYE_IDX = [33,  160, 158, 133, 153, 144]
 ERROR_LOG_FILE = "tracking_error_log.json"
 
 # Ignore initial servo movement/transient response
-STEADY_STATE_DELAY_S = 5.0
+SETTLED_STATE_DELAY_S = 5.0
 
 tracking_error_data = []
 tracking_start_time = None
@@ -901,7 +901,7 @@ def main():
             err_x = float(nose_x - cx)
             err_y = float(nose_y - cy)
 
-            # ── STEADY STATE ERROR LOGGING ─────────────────────────────
+            # ── SETTLED_STATE ERROR LOGGING ─────────────────────────────
             # Start timer once calibration is complete
             if calib_done and tracking_start_time is None:
                 tracking_start_time = time.time()
@@ -912,7 +912,7 @@ def main():
 
                 elapsed = time.time() - tracking_start_time
 
-                if elapsed >= STEADY_STATE_DELAY_S:
+                if elapsed >= SETTLED_STATE_DELAY_S:
 
                     error_px = math.sqrt(
                         err_x**2 + err_y**2
