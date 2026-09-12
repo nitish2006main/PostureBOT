@@ -3,7 +3,7 @@ face_tracker_v4.py  —  PostureBOT
 ===========================================================
 Camera is physically mounted on the pan-tilt head.
 MediaPipe detects the nose tip pixel error and sends it to the ESP32.
-The ESP32 runs the PID controller and drives the servos directly.
+The ESP32 runs the P controller and drives the servos directly.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WHAT THIS FILE DOES
@@ -11,7 +11,7 @@ WHAT THIS FILE DOES
   1. Opens the webcam and runs MediaPipe FaceLandmarker each frame.
   2. Extracts nose-tip (landmark 1) pixel position.
   3. Sends "ERR,px,py" pixel error to the ESP32 every 50 ms.
-     The ESP32 runs PID and drives servos autonomously.
+     The ESP32 runs P and drives servos autonomously.
   4. Calibration: Python detects when nose stays inside CALIB_BOX_PX for
      CALIB_HOLD_SECONDS (5 s), then sends "CALIB_OK".
   5. Sends "DIST,z_cm" every 100 ms so the ESP32 can compute XYZ.
@@ -698,8 +698,8 @@ def main():
     calib_nose_in_since = None   # timestamp when nose first entered the calib box
     in_calibration      = False  # True while ESP32 is actively calibrating
 
-    # focal length is unknown at startup — computed once from frame width and camera FOV
-    focal_px     = 0.0  # estimated camera focal length in pixels (computed from FOV)
+    # focal px calculated from python script (calibrate_focal.py)
+    FOCAL_PX    = 463  
     # estimated real-world distance from the camera to the user's face in centimetres
     current_z_cm = 0.0  # current estimated distance from camera to face in cm
 
@@ -778,10 +778,6 @@ def main():
         h, w   = frame.shape[:2]
         # compute the pixel coordinates of the frame centre — used as the tracking target
         cx, cy = w // 2, h // 2
-
-        # focal length estimated once from frame width and FOV — required for face-width depth estimation
-        if focal_px < 1.0:
-            focal_px = w / (2.0 * math.tan(math.radians(CAMERA_FOV_H / 2.0)))
 
         # ── PAUSED STATE ──────────────────────────────────────────────────────
         # when the session is paused, skip all tracking and only wait for RESUME or STOP
@@ -879,9 +875,9 @@ def main():
 
             # landmarks 234 and 454 are the outer cheek edges — their pixel distance shrinks as the face moves away
             face_width_px = abs(lm[454].x - lm[234].x) * w
-            if face_width_px > 1.0 and focal_px > 1.0:
+            if face_width_px > 1.0 and FOCAL_PX > 1.0:
                 # pinhole camera model: real_size * focal_length / pixel_size = distance in cm
-                current_z_cm = (REAL_FACE_WIDTH_CM * focal_px) / face_width_px
+                current_z_cm = (REAL_FACE_WIDTH_CM * FOCAL_PX) / face_width_px
 
             # check if the user has moved too far or too close compared to their calibration position
             if calib_done and calib_z_cm > 0:
@@ -907,7 +903,7 @@ def main():
                 tracking_start_time = time.time()
 
 
-            # Ignore first 5 seconds while PID settles
+            # Ignore first 5 seconds while P settles
             if tracking_start_time is not None:
 
                 elapsed = time.time() - tracking_start_time
@@ -1199,7 +1195,7 @@ def main():
                 # clear buzzer flags since calibration needs a clean start
                 buzz_pose           = False
                 buzz_dist           = False
-                print("[Calib] Started — ESP32 PID driving to nose, then 5 s hold")
+                print("[Calib] Started — ESP32 P driving to nose, then 5 s hold")
 
             elif line == "CALIB_DONE":
                 # ESP32 has saved its servo positions to flash memory as the calibration origin

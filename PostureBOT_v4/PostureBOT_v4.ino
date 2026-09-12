@@ -101,7 +101,7 @@ Preferences prefs;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  PCA9685 SERVO CONFIG
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════`
 #define SERVO_PAN_CH    15
 #define SERVO_TILT_CH   14
 
@@ -672,6 +672,7 @@ void runCalibration() {
     tft.setCursor(8, 68);
     if (tilt_deg >= 0) tft.print("+"); tft.print(tilt_deg, 1); tft.print("deg tilt");
     tft.setTextColor(LIME);
+    tft.setCursor(8, 75); tft.print("Z-dist(cm): "); tft.print(g_calib_z_cm);
     tft.setCursor(8, 96); tft.print("Saved to NVS \x02");   // \x02 = ☻ smiley
     xSemaphoreGive(oledMutex);
     delay(2500);   // show the result for 2.5 seconds
