@@ -282,7 +282,7 @@ def show_session_graph(session: dict):
 
     calib_z = float(session.get("calib_z_cm", 0.0))
     if calib_z <= 1.0:
-        calib_z = 60.0   # sensible fallback if not recorded
+        calib_z = 30.0   # sensible fallback if not recorded
 
     # Absolute depth from servo — clamp to prevent atan2 instability when
     # the user moves closer than their calibration distance.
