@@ -426,7 +426,7 @@ def show_session_graph(session: dict):
 #  HEAD POSE + EAR HELPERS
 # ══════════════════════════════════════════════════════════
 
-def get_head_pose(landmarks, w: int, h: int):
+def get_head_pose(landmarks, w: int, h: int, focal_px: int):
     """
     Returns (yaw, pitch, roll) in degrees using solvePnP against a 6-point
     3-D face model. Returns (None, None, None) if solving fails.
@@ -437,14 +437,13 @@ def get_head_pose(landmarks, w: int, h: int):
         for i in POSE_LANDMARK_IDS
     ], dtype=np.float64)
 
-    #estimate camera intrinsics — focal length = frame width, centre = frame centre
-    focal   = float(w)
+    #Camera matrix turning the points from the camera into pixel positions
     cam_mat = np.array([
-        [focal, 0,     w / 2.0],
-        [0,     focal, h / 2.0],
+        [focal_px, 0,     w / 2.0],
+        [0,     focal_px, h / 2.0],
         [0,     0,     1.0    ]
     ], dtype=np.float64)
-    #assume no lens distortion
+    #assume no lens distortion (not fully calibrated/finalized yet)
     dist_coeffs = np.zeros((4, 1), dtype=np.float64)
 
     #find the rotation that maps the 3D face model onto the 2D pixel points
@@ -1010,7 +1009,7 @@ def main():
             # ── HEAD POSE WARNING ─────────────────────────────────────────────
             # recalculate head pose every 10th frame — same throttle as EAR
             if frame_count % 10 == 0:
-                yaw, pitch, _ = get_head_pose(lm, w, h)
+                yaw, pitch, _ = get_head_pose(lm, w, h, FOCAL_PX)
             if yaw is not None:
                 # send a directional warning only when the state actually changes
                 # to avoid flooding the ESP32 with repeated identical messages
