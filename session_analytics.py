@@ -55,7 +55,7 @@ def load_all_stats(files):
         try:
             s = load_session(name)
             stats = s.get("stats", {})
-            data = s.get("data", [])
+            data = [p for p in s.get("data", []) if p.get("face", True)]
             rms_xy = (np.sqrt(np.mean([p["x"]**2 + p["y"]**2 for p in data]))
             if data else None)
             out.append({
@@ -239,7 +239,7 @@ def show_overlay(files, indices):
     for colour, idx in zip(cmap, indices):
         name = files[idx - 1]
         s = load_session(name)
-        data = s.get("data", [])
+        data = [p for p in s.get("data", []) if p.get("face", True)]
         if len(data) < 2:
             print(f"  [skip] {name}: not enough points")
             continue
@@ -263,7 +263,7 @@ def show_overlay(files, indices):
     ax.tick_params(colors="#2a4a6a")
     for spine in ax.spines.values():
         spine.set_color("#0e2236")
-    ax.set_title("Session overlay — head movement (top-down)",
+    ax.set_title("Session overlay — head movement (Front View)",
                  color="#b8d8e8", fontsize=11)
     ax.legend(loc="upper right", fontsize=8, facecolor="#08111e",
               edgecolor="#0e2236", labelcolor="white")
@@ -315,7 +315,7 @@ def main():
     print("\nWhat would you like to do?")
     print("  [1] Replay a single session (3D path)")
     print("  [2] View stability trend across all sessions")
-    print("  [3] Overlay compare 2+ sessions (top-down)")
+    print("  [3] Overlay compare 2+ sessions (Front View)")
     mode = input("Choice [1-3]: ").strip()
 
     if mode == "1":

@@ -834,7 +834,7 @@ void taskSerial(void* pv) {
             // Store for OLED display and send to Python for session logging.
             g_xyz_x = xv;  g_xyz_y = yv;  g_xyz_z = zv;
             char xyzBuf[48];
-            snprintf(xyzBuf, sizeof(xyzBuf), "XYZ,%.1f,%.1f,%.1f", xv, yv, zv);
+            snprintf(xyzBuf, sizeof(xyzBuf), "XYZ,%.1f,%.1f,%.1f", xv, yv, zv, (unsigned long)millis());
             Serial.println(xyzBuf);
         }
 

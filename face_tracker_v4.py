@@ -173,9 +173,9 @@ def save_session(session: dict):
         print(f"[Session] Save error: {e}")
 
 #shows all the stats
-def finalise_session(session: dict) -> dict:
-    data     = session.get("data", [])
-    duration = time.time() - session["_start_time"]
+def finalise_session(session: dict, paused_ms=0) -> dict:
+    data = [p for p in session.get("data", []) if p.get("face", True)]
+    duration = time.time() - session["_start_time"] - paused_ms / 1000
 
     xs = [abs(p["x"]) for p in data]
     ys = [abs(p["y"]) for p in data]
@@ -198,6 +198,7 @@ def finalise_session(session: dict) -> dict:
 
     session.pop("_start_time",  None)
     session.pop("_stop_reason", None)
+    session.pop("_esp_start", None)
     return session
 
 def calculate_tracking_error(error_data):
@@ -798,6 +799,10 @@ def main():
             cv2.imshow("PostureBOT", frame)
             # allow quitting with Q even while paused
             if cv2.waitKey(1) & 0xFF == ord("q"):
+                if active_session and active_session["data"]:
+                    if pause_started_at is not None:
+                        total_paused_ms += round((time.time() - pause_started_at) * 1000)
+                    save_session(finalise_session(active_session, total_paused_ms))
                 break
 
             # while paused, still read serial messages in case the user resumes or stops
@@ -829,7 +834,7 @@ def main():
                             total_paused_ms += round(
                                 (time.time() - pause_started_at) * 1000)
                         # compute final stats and write the session JSON file to disk
-                        finished = finalise_session(active_session)
+                        finished = finalise_session(active_session, total_paused_ms)
                         save_session(finished)
                         st = finished["stats"]
                         print(f"[Session] Saved  "
@@ -1242,7 +1247,7 @@ def main():
             elif line == "STOP":
                 if active_session and active_session["data"]:
                     # compute final statistics and write the session to a JSON file
-                    finished = finalise_session(active_session)
+                    finished = finalise_session(active_session, total_paused_ms)
                     save_session(finished)
                     st = finished["stats"]
                     print(f"[Session] Saved  "
@@ -1261,7 +1266,7 @@ def main():
             # ESP32 is broadcasting the current 3D head position in cm
             elif line.startswith("XYZ,"):
                 parts = line.split(",")
-                if len(parts) == 4:
+                if len(parts) in (4,5):
                     try:
                         # parse the three coordinate values from the comma-separated message
                         x = round(float(parts[1]), 2)
@@ -1272,15 +1277,22 @@ def main():
                         # only log to the session if a session is active and not paused
                         if active_session and not session_paused:
                             # calculate active elapsed time in ms, excluding all pause durations
-                            ms = round(
-                                (now - active_session["_start_time"]) * 1000
-                                - total_paused_ms)
+                            if len(parts) == 5:
+                                esp_ms = int(parts[4])
+                                if "_esp_start" not in active_session:
+                                    active_session["_esp_start"] = esp_ms
+                                ms = esp_ms - active_session["_esp_start"] - total_paused_ms
+                            else:
+                                ms = round(
+                                    (now - active_session["_start_time"]) * 1000
+                                    - total_paused_ms)
                             # compute radial distance from origin for later stats
                             r = round(math.sqrt(x**2 + y**2 + z**2), 2)
                             # append this data point to the session log
                             active_session["data"].append({
                                 "x": x, "y": y, "z": z, "r": r,
-                                "elapsed_ms": ms
+                                "elapsed_ms": ms,
+                                "face": face_visible
                             })
                     except ValueError:
                         # malformed XYZ message — skip it silently
@@ -1389,6 +1401,8 @@ def main():
 
         if key == ord("q"):
             print("[Main] Q pressed — quitting.")
+            if active_session and active_session["data"]:
+                save_session(finalise_session(active_session, total_paused_ms))
             break
 
     # ── SHUTDOWN ──────────────────────────────────────────────────────────────
