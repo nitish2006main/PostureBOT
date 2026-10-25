@@ -10,6 +10,7 @@ Extends the original single-session replay script with two new views:
 
 import os
 import json
+import numpy as np
 
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
 
@@ -54,6 +55,9 @@ def load_all_stats(files):
         try:
             s = load_session(name)
             stats = s.get("stats", {})
+            data = s.get("data", [])
+            rms_xy = (np.sqrt(np.mean([p["x"]**2 + p["y"]**2 for p in data]))
+            if data else None)
             out.append({
                 "name":      name,
                 "timestamp": s.get("timestamp", name),
@@ -61,13 +65,19 @@ def load_all_stats(files):
                 "max_x":     stats.get("max_x", 0),
                 "max_y":     stats.get("max_y", 0),
                 "max_z":     stats.get("max_z", 0),
+                "min_z":     stats.get("min_z"),
                 "avg_z":     stats.get("avg_z", 0),
                 "pts":       len(s.get("data", [])),
+                "rms_xy":    rms_xy,
             })
         except Exception as e:
             print(f"  [skip] {name}: {e}")
     return out
 
+def z_deviation(s):
+    if s["min_z"] is None:        # older sessions may not have min_z saved
+        return None
+    return max(abs(s["max_z"] or 0), abs(s["min_z"]))
 
 def print_index(stats_list):
     print(f"\n{'#':>3}  {'Timestamp':<22}  {'Duration':>8}  {'Pts':>5}  {'Score':>6}")
@@ -150,6 +160,46 @@ def show_trend(stats_list):
 
     ax.axhline(80, color="#4ade80", alpha=0.25, linewidth=0.8, linestyle="--")
     ax.axhline(50, color="#facc15", alpha=0.25, linewidth=0.8, linestyle="--")
+
+        # ── linear trend ──
+    import numpy as np
+    if len(scores) >= 3:
+        m, b = np.polyfit(xs, scores, 1)
+        fitted = np.polyval([m, b], xs)
+        ss_res = np.sum((np.array(scores) - fitted) ** 2)
+        ss_tot = np.sum((np.array(scores) - np.mean(scores)) ** 2)
+        r2 = 1 - ss_res / ss_tot if ss_tot else 0.0
+        sign = "+" if b >= 0 else "-"
+        ax.plot(xs, fitted, "--", color="#b8d8e8", linewidth=1.4, zorder=1,
+                label=f"y = {m:.2f}x {sign} {abs(b):.2f}   (R² = {r2:.2f})")
+        ax.legend(loc="lower right", fontsize=8, facecolor="#08111e",
+                  edgecolor="#0e2236", labelcolor="white")
+        print(f"\n[Trend] y = {m:.2f}x {sign} {abs(b):.2f}, R² = {r2:.2f}")
+
+        # ── duration check: is the score really just session length? ──
+        durs = [float(s["duration"] or 0) for s in stats_list]
+        if np.std(durs) > 0:
+            print(f"[Trend] corr(score, duration) = "
+                  f"{np.corrcoef(durs, scores)[0, 1]:+.2f}")
+                # ── max vs RMS: do they rank sessions the same way? ──
+        pairs = [(sc, s["rms_xy"], (s["max_x"] or 0) + (s["max_y"] or 0), i)
+            for i, (sc, s) in enumerate(zip(scores, stats_list), 1)
+            if s["rms_xy"]]
+        if len(pairs) >= 3:
+            sc_, rms_, dev_, idx_ = map(np.array, zip(*pairs))
+            rank = lambda a: np.argsort(np.argsort(a))
+            print(f"[Trend] rank corr(score, RMS) = "
+                  f"{np.corrcoef(rank(sc_), rank(rms_))[0, 1]:+.2f}  "
+                  f"(near -1 = same ranking; high score should mean low RMS)")
+            spiky = sorted(zip(dev_ / rms_, idx_), reverse=True)[:5]
+            print("[Trend] Most spike-driven sessions (max deviation ÷ RMS):")
+            for ratio, i in spiky:
+                print(f"  session {i}: {ratio:.1f}x")
+
+        print("[Trend] Z deviation per session (cm):")
+        for i, s in enumerate(stats_list, 1):
+            zd = z_deviation(s)
+            print(f"  {i:>3}: {'n/a' if zd is None else f'{zd:.1f}'}")
 
     shown_xs     = xs[::label_stride]
     shown_labels = labels[::label_stride]

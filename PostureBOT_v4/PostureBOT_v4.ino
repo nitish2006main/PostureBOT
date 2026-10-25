@@ -827,7 +827,7 @@ void taskSerial(void* pv) {
 
             // 3-D position: imagine the camera is a torch pointing in a direction.
             // The face is at distance d along that beam.
-            float xv   = - d * sinf(dp);                    // left/right
+            float xv   = - d * sinf(dp) * cosf(dt_a);                    // left/right
             float yv   = d * sinf(dt_a);                 // up/down
             float zv   = d * cosf(dp) * cosf(dt_a) - g_calib_z_cm;  // depth relative to calib
 

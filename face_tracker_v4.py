@@ -301,9 +301,12 @@ def show_session_graph(session: dict):
     # ── STEP 4 — wireframe sphere at average distance ─────────────
     # Plot convention: ax.plot(pan_component, depth_component, tilt_component)
     # i.e. matplotlib X=pan, matplotlib Y=depth, matplotlib Z=tilt.
+    
+    #points and circular limits of the longitude and latitude
     u = np.linspace(0, 2 * np.pi, 25)
     v = np.linspace(-np.pi / 2, np.pi / 2, 13)
 
+    # Drawing the actual rings from average radius
     # Latitude rings (horizontal circles)
     for v_val in v:
         xr = sphere_r * np.cos(v_val) * np.cos(u)
