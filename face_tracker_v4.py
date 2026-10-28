@@ -1276,16 +1276,11 @@ def main():
                         latest_xyz = (x, y, z)
                         # only log to the session if a session is active and not paused
                         if active_session and not session_paused:
-                            # calculate active elapsed time in ms, excluding all pause durations
-                            if len(parts) == 5:
-                                esp_ms = int(parts[4])
-                                if "_esp_start" not in active_session:
-                                    active_session["_esp_start"] = esp_ms
-                                ms = esp_ms - active_session["_esp_start"] - total_paused_ms
-                            else:
-                                ms = round(
-                                    (now - active_session["_start_time"]) * 1000
-                                    - total_paused_ms)
+                            # elapsed time from esp32 own clock, minus pauses
+                            esp_ms = int(parts[4])
+                            if "_esp_start" not in active_session:
+                                active_session["_esp_start"] = esp_ms
+                            ms = esp_ms - active_session["_esp_start"] - total_paused_ms
                             # compute radial distance from origin for later stats
                             r = round(math.sqrt(x**2 + y**2 + z**2), 2)
                             # append this data point to the session log
@@ -1296,7 +1291,9 @@ def main():
                             })
                     except ValueError:
                         # malformed XYZ message — skip it silently
-                        pass
+                        print(f"[Serial] Bad XYZ line skipped: {line}")
+                else:
+                    print(f"[Serial] XYZ line has {len(parts)} fields, expected 5: {line}")
 
         # ── OVERLAYS ──────────────────────────────────────────────────────────
         # draw a small static crosshair at the exact centre of the frame
