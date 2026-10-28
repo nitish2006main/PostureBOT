@@ -1054,7 +1054,7 @@ def main():
             # if no high-priority message is waiting, queue the nose pixel error for the ESP32
             # the ESP32 uses this error to drive the P controller and move the servos
             if pending not in ("CALIB_OK", "FOUND", "TILTL", "TILTR",
-                               "PITCHUP", "PITCHDOWN", "TILTOK"):
+                               "PITCHUP", "PITCHDOWN", "TILTOK",  "WARN", "LOST", "NOEYES"):
                 # apply deadband: zero out any error smaller than DEADBAND_PX pixels
                 # this prevents the servos from jittering when the nose is nearly centred
                 dx = int(err_x) if abs(err_x) > DEADBAND_PX else 0
@@ -1266,7 +1266,7 @@ def main():
             # ESP32 is broadcasting the current 3D head position in cm
             elif line.startswith("XYZ,"):
                 parts = line.split(",")
-                if len(parts) in (4,5):
+                if len(parts) == 5:
                     try:
                         # parse the three coordinate values from the comma-separated message
                         x = round(float(parts[1]), 2)
