@@ -316,7 +316,12 @@ struct {
     float    maxPan   = 0.0f;   // largest pan  angle reached (degrees from calib)
     float    maxTilt  = 0.0f;   // largest tilt angle reached (degrees from calib)
     uint32_t durSec   = 0;      // total session duration in seconds
+    uint32_t xySamples = 0;     // samples taken (face visible only)
+    uint32_t xyInZone  = 0;     // samples within ZONE_CM of calib origin
+    float    sumD2     = 0.0f;  // running sum of distance^2, for RMS
 } stats;
+
+const float ZONE_CM = 7.0f;     // must match ZONE_CM in session_analytics.py
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -526,14 +531,19 @@ void _drawStats(int sel) {
         tft.drawRect(62, y + 10, 64, 4, DARK_GREY);         // empty bar outline
     }
 
-    // Stability score: 100% = no movement; each degree of deviation costs 1.5 points.
-    // Green ≥ 80, Yellow ≥ 50, Red < 50.
-    float deviation = stats.maxPan + stats.maxTilt;
-    int score = (int)constrain(100.0f - deviation * 1.5f, 0.0f, 100.0f);
-    uint16_t scoreCol = (score >= 80) ? GREEN : (score >= 50) ? YELLOW : RED;
-    tft.setCursor(62, 102); tft.setTextColor(DARK_GREY); tft.print("Stab:");
-    tft.setTextColor(scoreCol); tft.setTextSize(1);
-    tft.print(score); tft.print("%");
+    tft.setCursor(62, 102); tft.setTextColor(DARK_GREY); tft.setTextSize(1);
+    tft.print("Zone:");
+    if (stats.xySamples > 0) {
+        int score = (int)(100.0f * stats.xyInZone / stats.xySamples + 0.5f);
+        float rms = sqrtf(stats.sumD2 / stats.xySamples);
+        uint16_t scoreCol = (score >= 80) ? GREEN : (score >= 50) ? YELLOW : RED;
+        tft.setTextColor(scoreCol);
+        tft.print(score); tft.print("%");
+        tft.setCursor(62, 114); tft.setTextColor(DARK_GREY); tft.print("RMS:");
+        tft.setTextColor(WHITE); tft.print(rms, 1); tft.print("cm");
+    } else {
+        tft.setTextColor(GREY); tft.print("n/a");
+    }
 
     xSemaphoreGive(oledMutex);
 }
@@ -836,6 +846,13 @@ void taskSerial(void* pv) {
             char xyzBuf[48];
             snprintf(xyzBuf, sizeof(xyzBuf), "XYZ,%.1f,%.1f,%.1f,%lu", xv, yv, zv, (unsigned long)millis());
             Serial.println(xyzBuf);
+
+            if (!g_targetLost) {                       // skip face-lost samples
+                float d2 = xv * xv + yv * yv + zv * zv;
+                stats.xySamples++;
+                stats.sumD2 += d2;
+                if (d2 < ZONE_CM * ZONE_CM) stats.xyInZone++;
+            }
         }
 
         // ── SEND session lifecycle messages ──────────────────────────────

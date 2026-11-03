@@ -55,9 +55,7 @@ def load_all_stats(files):
         try:
             s = load_session(name)
             stats = s.get("stats", {})
-            data = [p for p in s.get("data", []) if p.get("face", True)]
-            rms_xy = (np.sqrt(np.mean([p["x"]**2 + p["y"]**2 for p in data]))
-            if data else None)
+            score, rms_xy, worst = session_score(s.get("data", []))
             out.append({
                 "name":      name,
                 "timestamp": s.get("timestamp", name),
@@ -69,6 +67,9 @@ def load_all_stats(files):
                 "avg_z":     stats.get("avg_z", 0),
                 "pts":       len(s.get("data", [])),
                 "rms_xy":    rms_xy,
+                "score":     score,
+                "worst":     worst,
+
             })
         except Exception as e:
             print(f"  [skip] {name}: {e}")
@@ -80,30 +81,46 @@ def z_deviation(s):
     return max(abs(s["max_z"] or 0), abs(s["min_z"]))
 
 def print_index(stats_list):
-    print(f"\n{'#':>3}  {'Timestamp':<22}  {'Duration':>8}  {'Pts':>5}  {'Score':>6}")
-    print("-" * 56)
+    print(f"\n{'#':>3}  {'Timestamp':<22}  {'Duration':>8}  {'Pts':>5}  {'Score':>6}  {'RMS':>7}")
+    print("-" * 65)
     for i, s in enumerate(stats_list, 1):
-        score = stability_score(s["max_x"], s["max_y"])
+        score = "n/a" if s["score"] is None else f"{s['score']:.0f}%"
+        rms   = "n/a" if s["rms_xy"] is None else f"{s['rms_xy']:.1f}cm"
         print(f"{i:>3}  {s['timestamp']:<22}  {str(s['duration']):>7}s  "
-              f"{s['pts']:>5}  {score:>5.0f}%")
+              f"{s['pts']:>5}  {score:>6}  {rms:>7}")
 
 
 # ══════════════════════════════════════════════════════════
 #  STABILITY SCORE
-#  Same spirit as the ESP32 OLED's on-device score, adapted for the
-#  cm-scale X/Y deviation logged in each session's stats instead of
-#  the servo's pan/tilt degrees.  100% = no lateral/vertical movement
-#  from the calibration origin; score drops as deviation grows.
+#  Score = % of time within ZONE_CM of the calibration origin
 # ══════════════════════════════════════════════════════════
 
-STABILITY_CM_PER_POINT = 1.0   # calibrated against ~57 real sessions: median deviation
-                                # ~36cm, 75th pct ~55cm — this spreads real sessions across
-                                # the 0-100 range instead of clipping half of them to 0
+ZONE_CM      = 7.0f     # "in zone" = within 7 cm of calibration origin
+MAX_VALID_CM = 100.0   # farther than this = bad data
 
 
-def stability_score(max_x, max_y):
-    deviation = (max_x or 0) + (max_y or 0)
-    return max(0.0, min(100.0, 100.0 - deviation * STABILITY_CM_PER_POINT))
+def clean_points(data):
+    good = []
+    for p in data:
+        if not p.get("face", True):       continue   # face not detected
+        if p.get("elapsed_ms", 0) < 0:     continue   # before START
+        x, y, z = p.get("x"), p.get("y"), p.get("z")
+        if x is None or y is None or z is None: continue
+        if abs(x) > MAX_VALID_CM or abs(y) > MAX_VALID_CM or abs(z) > MAX_VALID_CM: continue
+        good.append(p)
+    return good
+
+
+def session_score(data):
+    """Returns (% time in zone, RMS cm, worst cm), or (None, None, None)."""
+    points = clean_points(data)
+    if not points:
+        return None, None, None
+    x = np.array([p["x"] for p in points])
+    y = np.array([p["y"] for p in points])
+    z = np.array([p["z"] for p in points])
+    d = np.sqrt(x**2 + y**2 + z**2)
+    return float(np.mean(d < ZONE_CM) * 100), float(np.sqrt(np.mean(d**2))), float(d.max())
 
 
 # ══════════════════════════════════════════════════════════
@@ -117,12 +134,13 @@ def show_trend(stats_list):
     import matplotlib
     matplotlib.use("TkAgg")
     import matplotlib.pyplot as plt
+    stats_list = [s for s in stats_list if s["score"] is not None]
 
     if len(stats_list) < 2:
         print("[Trend] Need at least 2 sessions to show a trend.")
         return
 
-    scores = [stability_score(s["max_x"], s["max_y"]) for s in stats_list]
+    scores = [s["score"] for s in stats_list]
     labels = [s["timestamp"].split(" ")[0] for s in stats_list]   # date only
 
     # With many sessions (dense testing days repeat the same date many times),
@@ -181,16 +199,10 @@ def show_trend(stats_list):
         if np.std(durs) > 0:
             print(f"[Trend] corr(score, duration) = "
                   f"{np.corrcoef(durs, scores)[0, 1]:+.2f}")
-                # ── max vs RMS: do they rank sessions the same way? ──
-        pairs = [(sc, s["rms_xy"], (s["max_x"] or 0) + (s["max_y"] or 0), i)
-            for i, (sc, s) in enumerate(zip(scores, stats_list), 1)
-            if s["rms_xy"]]
+        # ── spike check: sessions decided by one jump ──
+        pairs = [(s["rms_xy"], s["worst"], i) for i, s in enumerate(stats_list, 1) if s["rms_xy"]]
         if len(pairs) >= 3:
-            sc_, rms_, dev_, idx_ = map(np.array, zip(*pairs))
-            rank = lambda a: np.argsort(np.argsort(a))
-            print(f"[Trend] rank corr(score, RMS) = "
-                  f"{np.corrcoef(rank(sc_), rank(rms_))[0, 1]:+.2f}  "
-                  f"(near -1 = same ranking; high score should mean low RMS)")
+            rms_, dev_, idx_ = map(np.array, zip(*pairs))
             spiky = sorted(zip(dev_ / rms_, idx_), reverse=True)[:5]
             print("[Trend] Most spike-driven sessions (max deviation ÷ RMS):")
             for ratio, i in spiky:
@@ -206,7 +218,7 @@ def show_trend(stats_list):
     ax.set_xticks(shown_xs)
     ax.set_xticklabels(shown_labels, rotation=30, ha="right", color="#b8d8e8", fontsize=8)
     ax.set_ylim(0, 105)
-    ax.set_ylabel("Stability score (%)", color="#b8d8e8")
+    ax.set_ylabel(f"Time within {ZONE_CM:.0f} cm of origin (%)", color="#b8d8e8")
     ax.tick_params(colors="#2a4a6a")
     for spine in ax.spines.values():
         spine.set_color("#0e2236")
@@ -239,21 +251,21 @@ def show_overlay(files, indices):
     for colour, idx in zip(cmap, indices):
         name = files[idx - 1]
         s = load_session(name)
-        data = [p for p in s.get("data", []) if p.get("face", True)]
+        data = clean_points(s.get("data", []))
         if len(data) < 2:
             print(f"  [skip] {name}: not enough points")
             continue
         xs = [p["x"] for p in data]
         ys = [p["y"] for p in data]
-        score = stability_score(
-            s.get("stats", {}).get("max_x", 0),
-            s.get("stats", {}).get("max_y", 0),
-        )
-        label = f"{s.get('timestamp', name)}  ({score:.0f}%)"
+        score, rms, _ = session_score(s.get("data", []))
+        label = f"{s.get('timestamp', name)}  ({score:.0f}% in zone, RMS {rms:.1f} cm)"
         ax.plot(xs, ys, color=colour, linewidth=1.6, alpha=0.9, label=label)
 
     ax.scatter(0, 0, color="white", marker="*", s=160, zorder=5,
                label="Calibration origin")
+    t = np.linspace(0, 2 * np.pi, 200)
+    ax.plot(ZONE_CM * np.cos(t), ZONE_CM * np.sin(t), "--", color="#4ade80",
+            linewidth=0.9, alpha=0.6, label=f"Zone ({ZONE_CM:.0f} cm)")
 
     ax.set_aspect("equal", adjustable="box")
     ax.axhline(0, color="#1a3550", linewidth=0.6)
