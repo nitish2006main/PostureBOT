@@ -321,7 +321,7 @@ struct {
     float    sumD2     = 0.0f;  // running sum of distance^2, for RMS
 } stats;
 
-const float ZONE_CM = 7.0f;     // must match ZONE_CM in session_analytics.py
+const float ZONE_CM = 3.0f;     // must match ZONE_CM in session_analytics.py
 
 
 // ═══════════════════════════════════════════════════════════════════════════════

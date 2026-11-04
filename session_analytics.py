@@ -95,7 +95,7 @@ def print_index(stats_list):
 #  Score = % of time within ZONE_CM of the calibration origin
 # ══════════════════════════════════════════════════════════
 
-ZONE_CM      = 7.0    # "in zone" = within 7 cm of calibration origin
+ZONE_CM      = 3.0    # "in zone" = within 3 cm of calibration origin
 MAX_VALID_CM = 100.0   # farther than this = bad data
 
 
