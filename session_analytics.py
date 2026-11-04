@@ -95,7 +95,7 @@ def print_index(stats_list):
 #  Score = % of time within ZONE_CM of the calibration origin
 # ══════════════════════════════════════════════════════════
 
-ZONE_CM      = 7.0f     # "in zone" = within 7 cm of calibration origin
+ZONE_CM      = 7.0    # "in zone" = within 7 cm of calibration origin
 MAX_VALID_CM = 100.0   # farther than this = bad data
 
 
@@ -193,6 +193,28 @@ def show_trend(stats_list):
         ax.legend(loc="lower right", fontsize=8, facecolor="#08111e",
                   edgecolor="#0e2236", labelcolor="white")
         print(f"\n[Trend] y = {m:.2f}x {sign} {abs(b):.2f}, R² = {r2:.2f}")
+
+        # ── outlier check (IQR rule): flag, don't delete ──
+        q1, q3 = np.percentile(scores, [25, 75])
+        iqr = q3 - q1
+        lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+        flagged = [i for i, sc in enumerate(scores) if sc < lo or sc > hi]
+        print(f"[Trend] median = {np.median(scores):.1f}%, IQR = {iqr:.1f}")
+        if flagged:
+            print("[Trend] Outlier sessions:", [i + 1 for i in flagged])
+            # circle the outlier sessions on the graph
+            ax.scatter([xs[i] for i in flagged], [scores[i] for i in flagged],
+                    s=220, facecolors="none", edgecolors="#f87171",
+                    linewidths=1.5, zorder=3, label="Outlier (IQR rule)")
+            keep = [i for i in range(len(scores)) if i not in flagged]
+            if len(keep) >= 3:
+                m2, b2 = np.polyfit([xs[i] for i in keep], [scores[i] for i in keep], 1)
+                ax.plot(xs, np.polyval([m2, b2], xs), ":", color="#f87171",
+                        linewidth=1.4, zorder=1,
+                        label=f"Trend without outliers (slope {m2:+.2f})")
+                print(f"[Trend] slope with outliers: {m:+.2f}/session, without: {m2:+.2f}/session")
+            ax.legend(loc="lower right", fontsize=8, facecolor="#08111e",
+                    edgecolor="#0e2236", labelcolor="white")
 
         # ── duration check: is the score really just session length? ──
         durs = [float(s["duration"] or 0) for s in stats_list]
